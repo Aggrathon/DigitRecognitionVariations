@@ -1,0 +1,5 @@
+__pycache__/
+.vscode
+*.idx1-ubyte
+*.idx3-ubyte
+env/
