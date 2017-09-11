@@ -23,9 +23,11 @@ def model_fn(features, labels, mode):
         prev_layer = tf.layers.dense(prev_layer, size, activation=tf.nn.relu, name='fc%d'%i)
         prev_layer = tf.layers.dropout(prev_layer, 0.3, training=training, name='dropout%d'%i)
     logit = tf.layers.dense(prev_layer, 10, name='logit')
-    result = tf.argmax(tf.nn.softmax(logit), 1)
+    pred = tf.nn.softmax(logit)
+    result = tf.argmax(pred, 1)
     loss = None
     train_op = None
+    metrics = None
     if labels is not None:
         loss = tf.losses.softmax_cross_entropy(tf.one_hot(labels, 10), logit)
         if training:
@@ -35,11 +37,15 @@ def model_fn(features, labels, mode):
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 train_op = trainer.minimize(loss, global_step=global_step)
+        metrics = dict(
+            accuracy=tf.metrics.mean(tf.to_float(1 - tf.minimum(tf.abs(result-tf.to_int64(labels)), 1)))
+        )
     return tf.estimator.EstimatorSpec(
         mode=mode,
         loss=loss,
         train_op=train_op,
-        predictions=result
+        predictions=result,
+        eval_metric_ops=metrics
     )
 
 def evaluate(train=False, epochs=None):
