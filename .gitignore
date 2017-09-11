@@ -4,3 +4,4 @@ __pycache__/
 *.idx3-ubyte
 env/
 tf_cnn/
+tf_nn/
