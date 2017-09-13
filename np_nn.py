@@ -83,11 +83,24 @@ class Network():
             self.layers.append(Layer(size, s, 'fc%d'%i))
             size = s
         self.layers.append(Layer(size, output_size, 'output', softmax, softmax_prime))
+        self.batches = 0
+        try:
+            self.batches = np.load(os.path.join(FOLDER, 'meta.npy'))[0]
+        except:
+            pass
+    
+    def save(self):
+        try:
+            for l in self.layers:
+                l.save()
+            np.save(os.path.join(FOLDER, 'meta.npy'), np.array([self.batches]))
+        except:
+            pass
 
     def sgd(self, epochs=30, batch_size=100, learning_rate=0.05):
         img, lab = get_training_set()
+        data_size = img.shape[0]
         img.shape = img.shape[0], np.prod(img.shape[1:])
-        learning_rate /= batch_size
         try:
             for i in range(epochs):
                 rng = np.random.get_state()
@@ -96,25 +109,24 @@ class Network():
                 np.random.shuffle(lab)
                 time = timer()
                 loss = 0.0
-                for start in range(0, img.shape[0]-batch_size+1, batch_size):
+                for start in range(0, data_size-batch_size+1, batch_size):
                     n_b, n_w, l = self.backprop(img[start:start+batch_size], lab[start:start+batch_size])
+                    lr = learning_rate * 0.93**int(self.batches*8//data_size) / batch_size
                     for layer, b, w in zip(self.layers, n_b, n_w):
-                        layer.bias = layer.bias - learning_rate * b
-                        layer.weights = layer.weights - learning_rate * w - (1e-8)*layer.weights
+                        layer.bias = layer.bias - lr * b
+                        layer.weights = layer.weights - lr * w - (1e-8)*layer.weights
                     loss += l
+                    self.batches += 1
                     count = start//batch_size+1
                     if count%10 == 0:
-                        print('[Epoch %d - %d / %d]   Accuracy: %.3f   (%.2f s)'%(i, count, lab.shape[0]//batch_size, loss/(batch_size*10), (timer()-time)/10))
+                        print('[Epoch %d (%d / %d) | %d]   Accuracy: %.3f   (%.2f s)'%(i, count, data_size//batch_size, self.batches, 1.0-loss/(batch_size*10), (timer()-time)/10))
                         time = timer()
                         loss = 0.0
-                learning_rate *= 0.7
                 self.evaluate()
-            for l in self.layers:
-                l.save()
         except KeyboardInterrupt:
             print('Aborting...')
-            for l in self.layers:
-                l.save()
+        finally:
+            self.save()
 
     def backprop(self, x_list, y_list):
         n_b = [np.zeros_like(l.bias) for l in self.layers]
