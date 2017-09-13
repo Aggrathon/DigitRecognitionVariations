@@ -5,3 +5,4 @@ __pycache__/
 env/
 tf_cnn/
 tf_nn/
+np_nn/
