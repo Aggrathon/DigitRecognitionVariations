@@ -97,7 +97,7 @@ class Network():
         except:
             pass
 
-    def sgd(self, epochs=30, batch_size=100, learning_rate=0.05):
+    def sgd(self, epochs=20, batch_size=100, learning_rate=0.05):
         img, lab = get_training_set()
         data_size = img.shape[0]
         img.shape = img.shape[0], np.prod(img.shape[1:])
@@ -125,6 +125,7 @@ class Network():
                 self.evaluate()
         except KeyboardInterrupt:
             print('Aborting...')
+            self.evaluate()
         finally:
             self.save()
 
@@ -166,16 +167,12 @@ class Network():
         print('Evaluation:', correct, '/', lab.shape[0], 'correct')
 
 
-def _test_forward():
-    layer = Layer(10, 2)
-    inp = np.arange(0.0, 10.0)
-    print(layer.forward(inp))
-
-
 if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == "test1":
-        _test_forward()
+    if len(sys.argv) == 2 and sys.argv[1] == 'evaluate':
+        print(Network().evaluate())
+    elif len(sys.argv) == 2 and str.isnumeric(sys.argv[1]):
+        net = Network()
+        net.sgd(int(sys.argv[1]))
     else:
         net = Network()
-        net.sgd(2)
-        net.evaluate()
+        net.sgd()
