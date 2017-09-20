@@ -24,10 +24,6 @@ def softmax(x):
     x = x / np.sum(x)
     return x
 
-def softmax_prime(x):
-    #Not actually used
-    return x
-
 
 class Layer():
 
@@ -82,7 +78,7 @@ class Network():
         for i, s in enumerate([1024, 512, 128]):
             self.layers.append(Layer(size, s, 'fc%d'%i))
             size = s
-        self.layers.append(Layer(size, output_size, 'output', softmax, softmax_prime))
+        self.layers.append(Layer(size, output_size, 'output', None, None))
         self.batches = 0
         try:
             self.batches = np.load(os.path.join(FOLDER, 'meta.npy'))[0]
@@ -111,10 +107,10 @@ class Network():
                 loss = 0.0
                 for start in range(0, data_size-batch_size+1, batch_size):
                     n_b, n_w, l = self.backprop(img[start:start+batch_size], lab[start:start+batch_size])
-                    lr = learning_rate * 0.93**int(self.batches*8//data_size) / batch_size
+                    lr = learning_rate * 0.92**int(self.batches*8//data_size) / batch_size
                     for layer, b, w in zip(self.layers, n_b, n_w):
                         layer.bias = layer.bias - lr * b
-                        layer.weights = layer.weights - lr * w - (1e-8)*layer.weights
+                        layer.weights = layer.weights - lr * w - lr*(1e-4)*layer.weights
                     loss += l
                     self.batches += 1
                     count = start//batch_size+1
@@ -141,6 +137,7 @@ class Network():
                 a, z = layer.forward(activations[-1])
                 activations.append(a)
                 zs.append(z)
+            activations[-1] = softmax(activations[-1])
             loss += 0.0 if np.argmax(activations[-1]) == y else 1.0
             #backward
             delta = activations[-1]
