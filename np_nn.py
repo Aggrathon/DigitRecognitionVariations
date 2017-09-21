@@ -48,6 +48,7 @@ class Layer():
                 for i in range(result.shape[0]):
                     if np.random.uniform() < dropout:
                         result[i] = 0
+                        z[i] = 0
                     else:
                         result[i] = result[i]*scale
             return result, z
@@ -110,7 +111,7 @@ class Network():
                     lr = learning_rate * 0.92**int(self.batches*8//data_size) / batch_size
                     for layer, b, w in zip(self.layers, n_b, n_w):
                         layer.bias = layer.bias - lr * b
-                        layer.weights = layer.weights - lr * w - lr*(1e-4)*layer.weights
+                        layer.weights = layer.weights - lr * w
                     loss += l
                     self.batches += 1
                     count = start//batch_size+1
@@ -126,8 +127,8 @@ class Network():
             self.save()
 
     def backprop(self, x_list, y_list):
-        n_b = [np.zeros_like(l.bias) for l in self.layers]
-        n_w = [np.zeros_like(l.weights) for l in self.layers]
+        n_b = [(1e-4)*l.bias for l in self.layers]
+        n_w = [(1e-4)*l.weights for l in self.layers]
         loss = 0.0
         for x, y in zip(x_list, y_list):
             #forward

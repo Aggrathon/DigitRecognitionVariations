@@ -17,7 +17,6 @@ def analyse_layer_multiple(current_activations, next_layer: Layer):
     w_sum = np.zeros(current_activations[0].shape)
     w_max = np.zeros(current_activations[0].shape)
     for a in current_activations:
-        print(a.shape, w_sum.shape)
         w = np.abs(np.matmul(next_layer.weights, np.diag(a)))
         w_sum = w_sum + np.sum(w, 0)
         w_max = np.maximum(w_max, np.max(w, 0))
@@ -62,9 +61,8 @@ if __name__ == "__main__":
     print("Calculating activations")
     acts = get_activations(nn)
     print("Calculating node analytics")
-    print(acts[0][0].shape)
     for i in range(len(nn.layers)):
-        print("Layer %d"%i, acts[i][5432].shape)
+        print("Layer %d"%i)
         w0, w1, w2, b = analyse_layer_multiple(acts[i], nn.layers[i])
-        plt.title("Layer &d"%i)
+        plt.title("Layer %d"%i)
         plot_weights(w0, w1, w2, b)
