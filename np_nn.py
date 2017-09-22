@@ -32,7 +32,7 @@ class Layer():
         glorot = np.sqrt(6/(input_num+output_num))
         self.weights = np.random.uniform(-glorot, glorot, (output_num, input_num))
         self.activation = activation
-        if prime is None:
+        if activation is not None and prime is None:
             self.prime = lambda z: 1
         else:
             self.prime = prime
