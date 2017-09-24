@@ -35,6 +35,12 @@ def get_test_set():
     assert img.shape[0] == label.shape[0]
     return img, label
 
+def shuffle_sets(*args):
+    rng = np.random.get_state()
+    for data in args:
+        np.random.set_state(rng)
+        np.random.shuffle(data)
+
 
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == 'test':
