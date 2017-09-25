@@ -20,7 +20,7 @@ def get_training_set():
         Returns the images and labels of the training set as two numpy arrays
     """
     img = _read_images('train-images.idx3-ubyte')
-    img = 1.0 - img.astype(np.float32)*(1.0/255.0)
+    img = img.astype(np.float32)*(1.0/255.0)
     label = _read_labels('train-labels.idx1-ubyte')
     assert img.shape[0] == label.shape[0]
     return img, label
@@ -30,7 +30,7 @@ def get_test_set():
         Returns the images and labels of the test set as two numpy arrays
     """
     img = _read_images('t10k-images.idx3-ubyte')
-    img = 1.0 - img.astype(np.float32)*(1.0/255.0)
+    img = img.astype(np.float32)*(1.0/255.0)
     label = _read_labels('t10k-labels.idx1-ubyte')
     assert img.shape[0] == label.shape[0]
     return img, label
