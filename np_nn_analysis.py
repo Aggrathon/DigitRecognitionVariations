@@ -27,21 +27,19 @@ def _forward_backward_analysis(nn: Network, data, label, weights_sum, weights_ma
         biases[i+1] += np.sum(bias)
         #scale the previous activations dependent on the ouput node importance
         weight = np.matmul(np.diag(weight), nn.layers[i].weights)
+        if i == 0 and  correct:
+            weight2 = np.sum(weight, 0)
+            weight2.shape = weights_num[label].shape
+            weight2 /= np.sum(weight2)+0.0001
+            weights_num[label] += weight2
         weight = np.abs(np.matmul(weight, np.diag(activations[i])))
         #save both the sum (later average) and the maximum scaled activation
         weights_max[i] = np.maximum(weights_max[i], np.max(weight, 0))
         weights_sum[i] += np.sum(weight, 0)
-        if i == 0:
-            if correct:
-                weight = np.sum(weight, 0)
-                weight.shape = weights_num[label].shape
-                weight /= np.sum(weight)+0.0001
-                weights_num[label] += weight
-        else:
-            #scale the layer importances with biases and normalise
-            bias.shape = bias.shape + (1,)
-            division = (weight + np.repeat(bias, weight.shape[1], 1))*(np.sum(weight)+np.sum(bias))+(1e-8) #avoid divide by zero
-            weight = np.sum(weight/division, 0)
+        #scale the layer importances with biases and normalise
+        bias.shape = bias.shape + (1,)
+        division = (weight + np.repeat(bias, weight.shape[1], 1))*(np.sum(weight)+np.sum(bias))+(1e-8) #avoid divide by zero
+        weight = np.sum(weight/division, 0)
     return correct
 
 def _combine_analysis(nn: Network, images, labels):

@@ -108,7 +108,7 @@ class Network():
                 loss = 0.0
                 for start in range(0, data_size-batch_size+1, batch_size):
                     n_b, n_w, l = self.backprop(img[start:start+batch_size], lab[start:start+batch_size])
-                    lr = learning_rate * 0.92**int(self.batches*8//data_size) / batch_size
+                    lr = learning_rate * 0.9**int(self.batches*8//data_size) / batch_size
                     for layer, b, w in zip(self.layers, n_b, n_w):
                         layer.bias = layer.bias - lr * b
                         layer.weights = layer.weights - lr * w
