@@ -94,7 +94,7 @@ class Network():
         except:
             pass
 
-    def sgd(self, epochs=20, batch_size=100, learning_rate=0.05):
+    def sgd(self, epochs=20, batch_size=100, learning_rate=0.05, on_epoch=Network._sgd_on_epoch):
         img, lab = get_training_set()
         data_size = img.shape[0]
         img.shape = img.shape[0], np.prod(img.shape[1:])
@@ -119,7 +119,7 @@ class Network():
                         print('[Epoch %d (%d / %d) | %d]   Accuracy: %.3f   (%.2f s)'%(i, count, data_size//batch_size, self.batches, 1.0-loss/(batch_size*10), (timer()-time)/10))
                         time = timer()
                         loss = 0.0
-                self.evaluate()
+                on_epoch()
         except KeyboardInterrupt:
             print('Aborting...')
             self.evaluate()
@@ -151,6 +151,10 @@ class Network():
                 n_b[i] += delta
                 n_w[i] += np.outer(delta, activations[i].T)
         return n_b, n_w, loss
+
+    @classmethod
+    def _sgd_on_epoch(cls, network):
+        network.evaluate()
 
     def evaluate(self):
         img, lab = get_test_set()

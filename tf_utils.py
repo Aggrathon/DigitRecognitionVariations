@@ -1,7 +1,6 @@
 """
-    This script contains some useful functions
+    This script contains some useful tensorflow functions
 """
-
 import tensorflow as tf
 
 
@@ -22,4 +21,3 @@ def tf_learning_rate_scaling(points, global_step):
         rate = tf.maximum(rate, tf.add(tf.multiply(global_step, a), b))
     rate = tf.maximum(rate, points[-1][1])
     return rate
-

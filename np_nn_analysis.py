@@ -8,8 +8,9 @@ from multiprocessing import Pool
 from matplotlib import pyplot as plt
 from np_nn import Layer, Network, FOLDER, softmax
 from data import get_test_set, shuffle_sets
+from np_utils import np_onehot
 
-def _forward_backward_analysis(nn: Network, data, label, weights_sum, weights_max, biases, weights_num):
+def _fb_analysis(nn: Network, data, label, weights_sum, weights_max, biases, weights_num):
     data.shape = np.prod(data.shape)
     activations = [data]
     for layer in nn.layers:
@@ -27,11 +28,13 @@ def _forward_backward_analysis(nn: Network, data, label, weights_sum, weights_ma
         biases[i+1] += np.sum(bias)
         #scale the previous activations dependent on the ouput node importance
         weight = np.matmul(np.diag(weight), nn.layers[i].weights)
-        if i == 0 and  correct:
-            weight2 = np.sum(weight, 0)
+        if i == 0:
+            weight2 = np.sum(np.abs(weight), 0)
             weight2.shape = weights_num[label].shape
             weight2 /= np.sum(weight2)+0.0001
-            weights_num[label] += weight2
+            weights_num[-1] += weight2
+            if correct:
+                weights_num[label] += weight2
         weight = np.abs(np.matmul(weight, np.diag(activations[i])))
         #save both the sum (later average) and the maximum scaled activation
         weights_max[i] = np.maximum(weights_max[i], np.max(weight, 0))
@@ -42,30 +45,31 @@ def _forward_backward_analysis(nn: Network, data, label, weights_sum, weights_ma
         weight = np.sum(weight/division, 0)
     return correct
 
-def _combine_analysis(nn: Network, images, labels):
+def _combine_fb_analysis(nn: Network, images, labels):
     weights_sum = [np.zeros(np.prod(images[0].shape))]+[np.zeros_like(l.bias) for l in nn.layers]
     weights_max = [np.zeros(np.prod(images[0].shape))]+[np.zeros_like(l.bias) for l in nn.layers]
     biases = np.zeros(len(nn.layers)+1, float)
-    weights_num = [np.zeros(images[0].shape[:2]) for _ in range(10)]
+    weights_num = [np.zeros(images[0].shape[:2]) for _ in range(11)]
     correct = 0
     for img, lab in zip(images, labels):
-        if _forward_backward_analysis(nn, img, lab, weights_sum, weights_max, biases, weights_num):
+        if _fb_analysis(nn, img, lab, weights_sum, weights_max, biases, weights_num):
             correct += 1
     print('.', sep='', end='', flush=True)
     return weights_sum, weights_max, biases, correct, weights_num
 
-def backward_analysis(fraction=1):
+def forward_backward_analysis(fraction=1):
     print("Loading Data")
     nn = Network()
     images, labels = get_test_set()
     shuffle_sets(images, labels)
     pool_size = 4
     data_size = images.shape[0]//fraction
-    size = data_size//(pool_size*2)
+    splits = int(np.sqrt(np.maximum(10-fraction, 0))+1)
+    size = data_size//(pool_size*splits)
     pool = Pool(pool_size)
     data = [(nn, images[i:i+size], labels[i:i+size]) for i in range(0, data_size, size)]
     print("Calculating Node Statistics", end='', flush=True)
-    result = pool.starmap(_combine_analysis, data)
+    result = pool.starmap(_combine_fb_analysis, data)
     print()
     weights_sum = result[0][0]
     weights_max = result[0][1]
@@ -84,7 +88,40 @@ def backward_analysis(fraction=1):
         weights_sum[i] /= data_size
     biases /= data_size
     weights = [np.maximum(a, b) for a, b in zip(weights_max, weights_sum)]
-    return weights, biases, float(correct)/float(size*pool_size*2), weights_num
+    return weights, biases, float(correct)/float(size*pool_size*splits), weights_num
+
+def backward_analysis():
+    nn = Network()
+    cases = [np_onehot(10, i, float) for i in range(10)] + [np.ones(10, float)]
+    weights_sum = [np.zeros(nn.layers[0].weights.shape[1])]+[np.zeros_like(l.bias) for l in nn.layers]
+    weights_max = [np.zeros(nn.layers[0].weights.shape[1])]+[np.zeros_like(l.bias) for l in nn.layers]
+    biases = np.zeros(len(nn.layers)+1, float)
+    weights_num = [np.zeros((28, 28)) for _ in range(11)]
+    for case, output in enumerate(cases):
+        weight = output
+        for i in reversed(range(len(nn.layers))):
+            #scale the biases dependent on the ouput node importance
+            biases[i+1] += np.sum(np.abs(weight*nn.layers[i].bias))
+            #scale the previous layer nodes dependent on the ouput node importance
+            weight = np.abs(np.matmul(np.diag(weight), nn.layers[i].weights))
+            #save both the sum (later average) and the maximum importances
+            weights_max[i] = np.maximum(weights_max[i], np.max(weight, 0))
+            weight = np.sum(weight, 0)
+            weights_sum[i] += weight
+            #normalise the layer importances
+            weight = weight/(np.sum(weight)+(1e-8))
+            #save pixel activations
+            if i == 0:
+                weight.shape = weights_num[case].shape
+                weights_num[-1] += weight
+                weights_num[case] += weight
+    for i in range(len(weights_sum)):
+        weights_sum[i] /= len(cases)
+    biases /= len(cases)
+    weights = [np.maximum(a, b) for a, b in zip(weights_max, weights_sum)]
+    weights[-1] = np.sum(cases, 0) / len(cases)
+    return weights, biases, 0.0, weights_num
+
 
 def plot_analysis(weights, biases):
     for i, (w, b) in enumerate(zip(weights, biases)):
@@ -106,14 +143,19 @@ def plot_images(images, labels):
     v = int(np.ceil(np.sqrt(len(images))))
     h = int(np.ceil(len(images)/v))
     for i, (img, lab) in enumerate(zip(images, labels)):
-        plt.subplot(v, h, i+1)
+        plt.subplot(h, v, i+1)
         plt.title(lab)
         plt.imshow(img, cmap='gray')
     plt.show()
 
 
 if __name__ == "__main__":
-    res = backward_analysis(10)
-    print("Correct: %.3f%%"%(100*res[2]))
-    plot_analysis(*res[:2])
-    plot_images(res[3], np.arange(10))
+    if len(sys.argv) == 2 and sys.argv[1] == 'data':
+        res = forward_backward_analysis()
+        print("Correct: %.3f%%"%(100*res[2]))
+        plot_analysis(*res[:2])
+        plot_images(res[3], np.arange(10))
+    else:
+        res = backward_analysis()
+        plot_analysis(*res[:2])
+        plot_images(res[3], [str(i) for i in range(10)]+['All'])
