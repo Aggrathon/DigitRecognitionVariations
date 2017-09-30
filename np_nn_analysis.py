@@ -57,9 +57,10 @@ def _combine_fb_analysis(nn: Network, images, labels):
     print('.', sep='', end='', flush=True)
     return weights_sum, weights_max, biases, correct, weights_num
 
-def forward_backward_analysis(fraction=1):
+def forward_backward_analysis(nn: Network=None, fraction=1):
+    if nn is None:
+        nn = Network()
     print("Loading Data")
-    nn = Network()
     images, labels = get_test_set()
     shuffle_sets(images, labels)
     pool_size = 4
@@ -90,8 +91,10 @@ def forward_backward_analysis(fraction=1):
     weights = [np.maximum(a, b) for a, b in zip(weights_max, weights_sum)]
     return weights, biases, float(correct)/float(size*pool_size*splits), weights_num
 
-def backward_analysis():
-    nn = Network()
+
+def backward_analysis(nn: Network=None):
+    if nn is None:
+        nn = Network()
     cases = [np_onehot(10, i, float) for i in range(10)] + [np.ones(10, float)]
     weights_sum = [np.zeros(nn.layers[0].weights.shape[1])]+[np.zeros_like(l.bias) for l in nn.layers]
     weights_max = [np.zeros(nn.layers[0].weights.shape[1])]+[np.zeros_like(l.bias) for l in nn.layers]
@@ -122,7 +125,6 @@ def backward_analysis():
     weights[-1] = np.sum(cases, 0) / len(cases)
     return weights, biases, 0.0, weights_num
 
-
 def plot_analysis(weights, biases):
     for i, (w, b) in enumerate(zip(weights, biases)):
         plt.subplot(len(weights), 1, i+1)
@@ -149,12 +151,84 @@ def plot_images(images, labels):
     plt.show()
 
 
+def reactivate_dead_nodes(nn, weights=None, biases=None):
+    if biases is None or weights is None:
+        weights, biases = forward_backward_analysis(nn)[:2]
+    reac = 0
+    for i, layer in enumerate(weights[1:]):
+        b = max(1e-4, min(biases[i]*0.2, np.max(layer)*0.1, np.mean(layer)-np.std(layer)))
+        for j, w in enumerate(layer):
+            if w < b:
+                reac += 1
+                lw = nn.layers[i].weights
+                for k in range(lw.shape[1]):
+                    lw[j, k] = lw[np.random.randint(lw.shape[0]), np.random.randint(lw.shape[1])]*4
+                if i+1 < len(nn.layers):
+                    lw = nn.layers[i+1].weights
+                    for k in range(lw.shape[0]):
+                        lw[k, j] = lw[np.random.randint(lw.shape[0]), np.random.randint(lw.shape[1])]*2
+    print("%d nodes reactivated"%reac)
+
+def num_dead_nodes(nn: Network, weights=None, biases=None):
+    if biases is None or weights is None:
+        weights, biases = forward_backward_analysis(nn)[:2]
+    reac = 0
+    for i, layer in enumerate(weights[1:]):
+        b = max(1e-4, min(biases[i]*0.2, np.max(layer)*0.1, np.mean(layer)-np.std(layer)))
+        for w in layer:
+            if w < b:
+                reac += 1
+    print("%d dead nodes"%reac)
+    return reac
+
+def _cl_learn_prog(nn: Network):
+    progression = []
+    on_iter_orig = Network.get_default_on_iter()
+    def on_iter(nn: Network, epoch: int, iteration: int, loss: float):
+        nonlocal progression
+        nonlocal on_iter_orig
+        on_iter_orig(nn, epoch, iteration, loss)
+        if iteration%100 == 0:
+            progression.append(nn.evaluate(set_size=0.5))
+    nn.sgd(1, on_iter=on_iter, on_epoch=lambda nn: None)
+    return progression
+
+def compare_learning():
+    nn1 = Network()
+    print("Beginning with a normal epoch for both options")
+    prog1 = _cl_learn_prog(nn1)
+    nn1.save()
+    nn2 = Network()
+    print("First: a normal epoch")
+    prog2 = _cl_learn_prog(nn1)
+    reactivate_dead_nodes(nn2)
+    print("Second: a modified epoch")
+    prog3 = [nn2.evaluate()] + _cl_learn_prog(nn2)
+    num_dead_nodes(nn2)
+    if prog2[-1] > prog3[-1]:
+        nn1.save()
+        print("The original was better")
+    else:
+        nn2.save()
+        print("The modified was better")
+    plt.plot(np.arange(len(prog1)+len(prog2)), prog1+prog2)
+    for i, p in enumerate(prog1):
+        prog1[i] = p-(1e-4)
+    plt.plot(np.arange(len(prog1)+len(prog3)), prog1[:-1]+prog3)
+    plt.show()
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == 'data':
         res = forward_backward_analysis()
         print("Correct: %.3f%%"%(100*res[2]))
         plot_analysis(*res[:2])
         plot_images(res[3], np.arange(10))
+    elif len(sys.argv) == 2 and sys.argv[1] == 'reac':
+        reactivate_dead_nodes(Network())
+    elif len(sys.argv) == 2 and sys.argv[1] == 'comp':
+        print("Comparing a normal epoch and Reactivating nodes")
+        compare_learning()
     else:
         res = backward_analysis()
         plot_analysis(*res[:2])
