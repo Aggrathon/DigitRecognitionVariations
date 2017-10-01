@@ -6,3 +6,4 @@ env/
 tf_cnn/
 tf_nn/
 np_nn/
+np_nn_ready/

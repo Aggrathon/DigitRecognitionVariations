@@ -155,18 +155,33 @@ def reactivate_dead_nodes(nn, weights=None, biases=None):
     if biases is None or weights is None:
         weights, biases = forward_backward_analysis(nn)[:2]
     reac = 0
+    means = [np.mean(np.abs(l.weights)) for l in nn.layers]
     for i, layer in enumerate(weights[1:]):
-        b = max(1e-4, min(biases[i]*0.2, np.max(layer)*0.1, np.mean(layer)-np.std(layer)))
+        b0 = biases[i]*0.4
+        b1 = np.max(layer)*0.1
+        b2 = np.mean(layer)-np.std(layer)
+        b3 = np.mean(layer)*0.2
+        b = max(1e-4, min(b0, b1, b2, b3))
+        """
+        if b == b0:
+            print("bias")
+        elif b == b1:
+            print("max")
+        elif b == b2:
+            print("mean-std")
+        else:
+            print("min")
+        """
         for j, w in enumerate(layer):
             if w < b:
                 reac += 1
                 lw = nn.layers[i].weights
                 for k in range(lw.shape[1]):
-                    lw[j, k] = lw[np.random.randint(lw.shape[0]), np.random.randint(lw.shape[1])]*4
+                    lw[j, k] = np.random.uniform(-means[i], means[i])*3
                 if i+1 < len(nn.layers):
                     lw = nn.layers[i+1].weights
                     for k in range(lw.shape[0]):
-                        lw[k, j] = lw[np.random.randint(lw.shape[0]), np.random.randint(lw.shape[1])]*2
+                        lw[k, j] = np.random.uniform(-means[i+1], means[i+1])*2
     print("%d nodes reactivated"%reac)
 
 def num_dead_nodes(nn: Network, weights=None, biases=None):
@@ -174,36 +189,43 @@ def num_dead_nodes(nn: Network, weights=None, biases=None):
         weights, biases = forward_backward_analysis(nn)[:2]
     reac = 0
     for i, layer in enumerate(weights[1:]):
-        b = max(1e-4, min(biases[i]*0.2, np.max(layer)*0.1, np.mean(layer)-np.std(layer)))
+        b = max(1e-4, min(biases[i]*0.4, np.max(layer)*0.1, np.mean(layer)-np.std(layer), np.mean(layer)*0.2))
         for w in layer:
             if w < b:
                 reac += 1
     print("%d dead nodes"%reac)
     return reac
 
-def _cl_learn_prog(nn: Network):
+def _cl_learn_prog(nn: Network, epochs: int=1):
     progression = []
     on_iter_orig = Network.get_default_on_iter()
     def on_iter(nn: Network, epoch: int, iteration: int, loss: float):
         nonlocal progression
         nonlocal on_iter_orig
+        nonlocal epochs
         on_iter_orig(nn, epoch, iteration, loss)
         if iteration%100 == 0:
-            progression.append(nn.evaluate(set_size=0.5))
-    nn.sgd(1, on_iter=on_iter, on_epoch=lambda nn: None)
+            progression.append(nn.evaluate(set_size=1.0 if epochs < 3 else 0.5))
+    nn.sgd(epochs, on_iter=on_iter, on_epoch=lambda nn: None)
     return progression
 
-def compare_learning():
+def compare_learning(epochs=2):
+    e1 = (epochs*2)//3
+    e2 = epochs-e1
     nn1 = Network()
-    print("Beginning with a normal epoch for both options")
-    prog1 = _cl_learn_prog(nn1)
+    print("Beginning with some normal epochs for both options")
+    prog1 = [nn1.evaluate()] + _cl_learn_prog(nn1, e1)
     nn1.save()
     nn2 = Network()
     print("First: a normal epoch")
-    prog2 = _cl_learn_prog(nn1)
-    reactivate_dead_nodes(nn2)
+    prog2 = prog1 + _cl_learn_prog(nn1, e2)
     print("Second: a modified epoch")
-    prog3 = [nn2.evaluate()] + _cl_learn_prog(nn2)
+    reactivate_dead_nodes(nn2)
+    prog_re = nn2.evaluate()
+    prog3 = prog1 + _cl_learn_prog(nn2, e2)
+    for i, p in enumerate(prog1):
+        prog3[i] = p-(1e-5)
+    prog3[len(prog1)-1] = prog_re
     num_dead_nodes(nn2)
     if prog2[-1] > prog3[-1]:
         nn1.save()
@@ -211,10 +233,8 @@ def compare_learning():
     else:
         nn2.save()
         print("The modified was better")
-    plt.plot(np.arange(len(prog1)+len(prog2)), prog1+prog2)
-    for i, p in enumerate(prog1):
-        prog1[i] = p-(1e-4)
-    plt.plot(np.arange(len(prog1)+len(prog3)), prog1[:-1]+prog3)
+    plt.plot(np.arange(len(prog2)), prog2)
+    plt.plot(np.arange(len(prog3)), prog3)
     plt.show()
 
 
@@ -229,6 +249,9 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2 and sys.argv[1] == 'comp':
         print("Comparing a normal epoch and Reactivating nodes")
         compare_learning()
+    elif len(sys.argv) == 3 and sys.argv[1] == 'comp' and sys.argv[2].isnumeric():
+        print("Comparing a normal epoch and Reactivating nodes")
+        compare_learning(int(sys.argv[2]))
     else:
         res = backward_analysis()
         plot_analysis(*res[:2])

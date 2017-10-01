@@ -11,7 +11,7 @@ from data import get_test_set, get_training_set, shuffle_sets
 FOLDER = 'np_nn'
 
 def relu(x):
-    return np.maximum(0.0, x)
+    return np.fmax(0.0, x)
 
 def relu_prime(x):
     return (x > 0).astype(x.dtype)
@@ -113,7 +113,7 @@ class Network():
                 np.random.shuffle(lab)
                 for start in range(0, data_size-batch_size+1, batch_size):
                     n_b, n_w, loss = self.backprop(img[start:start+batch_size], lab[start:start+batch_size])
-                    lr = learning_rate * 0.9**int(self.batches*8//data_size) / batch_size
+                    lr = learning_rate * 0.86**int(self.batches*8//data_size) / batch_size
                     for layer, b, w in zip(self.layers, n_b, n_w):
                         layer.bias = layer.bias - lr * b
                         layer.weights = layer.weights - lr * w
@@ -156,8 +156,8 @@ class Network():
         """
             Calculate backpropagation
         """
-        n_b = [(1e-4)*l.bias for l in self.layers]
-        n_w = [(1e-4)*l.weights for l in self.layers]
+        n_b = [(2e-5)*l.bias for l in self.layers]
+        n_w = [(2e-5)*l.weights for l in self.layers]
         loss = 0.0
         for x, y in zip(x_list, y_list):
             #forward
@@ -200,8 +200,8 @@ class Network():
             if np.argmax(prev) == lab[i]:
                 correct += 1
         if print_result:
-            print('Evaluation:', correct, '/', lab.shape[0], 'correct')
-        return float(correct)/float(lab.shape[0])
+            print('Evaluation:', correct, '/', size, 'correct')
+        return float(correct)/float(size)
 
 
 if __name__ == "__main__":
