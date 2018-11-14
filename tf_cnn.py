@@ -2,9 +2,10 @@
     This script contains a convolutional neural network built with tensorflow
 """
 import sys
+import numpy as np
 import tensorflow as tf
 from data import get_test_set, get_training_set
-from utils import tf_learning_rate_scaling
+from tf_utils import tf_learning_rate_scaling
 
 FOLDER = 'tf_cnn'
 
@@ -29,10 +30,10 @@ def model_fn(features, labels, mode):
     train_op = None
     metrics = None
     if labels is not None:
-        loss = tf.losses.softmax_cross_entropy(tf.one_hot(labels, 10), logit)
+        loss = tf.losses.softmax_cross_entropy(tf.one_hot(labels, 10), logit, label_smoothing=0.1)
         if training:
             global_step = tf.train.get_global_step()
-            learning_rate = tf_learning_rate_scaling([(0, 1e-3), (300, 1e-4), (1000, 1e-5), (3000, 1e-6), (8000, 1e-7)], global_step)
+            learning_rate = tf_learning_rate_scaling([(0, 1e-3), (300, 1e-4), (800, 1e-5), (2000, 1e-6), (5000, 1e-7)], global_step)
             trainer = tf.train.AdamOptimizer(learning_rate)
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
@@ -44,7 +45,7 @@ def model_fn(features, labels, mode):
         mode=mode,
         loss=loss,
         train_op=train_op,
-        predictions=result,
+        predictions={"prediction": result, "probabilities":  pred},
         eval_metric_ops=metrics
     )
 
@@ -65,11 +66,28 @@ def evaluate(train=False, epochs=None):
     img, lab = get_test_set()
     return model.evaluate(tf.estimator.inputs.numpy_input_fn(dict(img=img), lab, 1000, 1, True, 10000))
 
+def export_predictions():
+    """
+        Export the predictions and data as a csv
+    """
+    img, lab = get_test_set()
+    model = tf.estimator.Estimator(model_fn, FOLDER)
+    inp = tf.estimator.inputs.numpy_input_fn(dict(img=img), lab, 1000, 1, False, 10000)
+    with open("export.csv", "w") as file:
+        for i, p in enumerate(model.predict(inp)):
+            file.write("%d, %d"%(lab[i], p["prediction"]))
+            for k in p["probabilities"]:
+                file.write(", %f"%k)
+            for k in np.nditer(img[i, :, :, :]):
+                file.write(", %f"%k)
+            file.write("\n")
 
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == 'evaluate':
         print(evaluate(False))
     elif len(sys.argv) == 2 and str.isnumeric(sys.argv[1]):
         evaluate(True, int(sys.argv[1]))
+    elif len(sys.argv) == 2 and sys.argv[1] == "export":
+        export_predictions()
     else:
         evaluate(True)
